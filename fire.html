@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>退休資產計算機</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 800px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+        h1, h2 {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #005f73;
+            margin-top: 0;
+        }
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .control-group label {
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        input[type="range"] {
+            flex-grow: 1;
+            cursor: pointer;
+        }
+        .value-span {
+            font-weight: bold;
+            color: #0077b6;
+            min-width: 120px;
+            text-align: right;
+        }
+        .chart-container {
+            width: 100%;
+            height: 100%;
+            min-height: 300px;
+        }
+        #result {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #ae2012;
+            text-align: center;
+            padding: 15px;
+            background-color: #fdf0f0;
+            border-radius: 8px;
+            grid-column: 1 / -1;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>退休資產計算機</h1>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="age">目前年齡 (X)</label>
+            <div class="slider-container">
+                <input type="range" id="age" min="20" max="80" value="30">
+                <span class="value-span" id="ageValue">30 歲</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label for="retirementAge">預計退休年齡 (Y)</label>
+            <div class="slider-container">
+                <input type="range" id="retirementAge" min="30" max="100" value="65">
+                <span class="value-span" id="retirementAgeValue">65 歲</span>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label for="initialAssets">目前可投資資產</label>
+            <div class="slider-container">
+                <input type="range" id="initialAssets" min="0" max="100000000" step="100000" value="1000000">
+                <span class="value-span" id="initialAssetsValue">$ 1,000,000</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="annualInvestment">退休前每年可投資金額</label>
+            <div class="slider-container">
+                <input type="range" id="annualInvestment" min="0" max="10000000" step="10000" value="300000">
+                <span class="value-span" id="annualInvestmentValue">$ 300,000</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="annualSpending">退休後每年開銷</label>
+            <div class="slider-container">
+                <input type="range" id="annualSpending" min="0" max="10000000" step="10000" value="800000">
+                <span class="value-span" id="annualSpendingValue">$ 800,000</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="inflationRate">通貨膨脹率</label>
+            <div class="slider-container">
+                <input type="range" id="inflationRate" min="0" max="10" step="0.1" value="2">
+                <span class="value-span" id="inflationRateValue">2.0 %</span>
+            </div>
+        </div>
+
+        <div class="control-group">
+            <label for="returnRate">投資報酬率</label>
+            <div class="slider-container">
+                <input type="range" id="returnRate" min="0" max="100" step="0.1" value="7">
+                <span class="value-span" id="returnRateValue">7.0 %</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="chart-container">
+        <canvas id="assetChart"></canvas>
+    </div>
+
+    <h2 id="result"></h2>
+</div>
+
+<script>
+    const sliders = {
+        age: document.getElementById('age'),
+        retirementAge: document.getElementById('retirementAge'),
+        initialAssets: document.getElementById('initialAssets'),
+        annualInvestment: document.getElementById('annualInvestment'),
+        annualSpending: document.getElementById('annualSpending'),
+        inflationRate: document.getElementById('inflationRate'),
+        returnRate: document.getElementById('returnRate'),
+    };
+
+    const values = {
+        ageValue: document.getElementById('ageValue'),
+        retirementAgeValue: document.getElementById('retirementAgeValue'),
+        initialAssetsValue: document.getElementById('initialAssetsValue'),
+        annualInvestmentValue: document.getElementById('annualInvestmentValue'),
+        annualSpendingValue: document.getElementById('annualSpendingValue'),
+        inflationRateValue: document.getElementById('inflationRateValue'),
+        returnRateValue: document.getElementById('returnRateValue'),
+    };
+    
+    const resultElement = document.getElementById('result');
+    const ctx = document.getElementById('assetChart').getContext('2d');
+    let assetChart = null;
+
+    function formatCurrency(num) {
+        return `$ ${parseInt(num).toLocaleString()}`;
+    }
+
+    function calculateAndDraw() {
+        // --- 1. 讀取所有輸入值 ---
+        const age = parseInt(sliders.age.value);
+        const retirementAge = parseInt(sliders.retirementAge.value);
+        const initialAssets = parseFloat(sliders.initialAssets.value);
+        const annualInvestment = parseFloat(sliders.annualInvestment.value);
+        const annualSpendingStart = parseFloat(sliders.annualSpending.value);
+        const inflationRate = parseFloat(sliders.inflationRate.value) / 100;
+        const returnRate = parseFloat(sliders.returnRate.value) / 100;
+
+        // --- 2. 進行資產模擬計算 ---
+        const labels = [];
+        const assetData = [];
+        
+        let currentAssets = initialAssets;
+        let currentSpending = annualSpendingStart;
+        let ageLasted = 100;
+        let foundAge = false;
+
+        for (let currentAge = age; currentAge <= 100; currentAge++) {
+            labels.push(currentAge);
+            assetData.push(currentAssets);
+            
+            if (currentAssets < 0 && !foundAge) {
+                ageLasted = currentAge - 1;
+                foundAge = true;
+            }
+
+            // 計算下一年的資產
+            if (currentAge < retirementAge) {
+                // 退休前
+                currentAssets = currentAssets * (1 + returnRate) + annualInvestment;
+            } else {
+                // 退休後
+                const spendingThisYear = currentSpending;
+                currentAssets = (currentAssets - spendingThisYear) * (1 + returnRate);
+                // 計算下一年的開銷
+                currentSpending = currentSpending * (1 + inflationRate);
+            }
+        }
+
+        // --- 3. 更新結果文字 ---
+        resultElement.innerText = `${retirementAge}歲退休的資產將夠您使用到 ${ageLasted} 歲`;
+
+        // --- 4. 繪製圖表 ---
+        if (assetChart) {
+            assetChart.destroy();
+        }
+
+        assetChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '資產總額',
+                    data: assetData,
+                    borderColor: '#0077b6',
+                    backgroundColor: 'rgba(0, 119, 182, 0.1)',
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value, index, values) {
+                                if (value >= 1000000) return (value / 1000000) + 'M';
+                                if (value >= 1000) return (value / 1000) + 'K';
+                                return value;
+                            }
+                        },
+                        title: {
+                            display: true,
+                            text: '資產'
+                        }
+                    },
+                    x: {
+                         title: {
+                            display: true,
+                            text: '年齡'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += formatCurrency(context.parsed.y);
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // --- 5. 設定事件監聽 ---
+    sliders.age.addEventListener('input', (e) => {
+        const age = e.target.value;
+        values.ageValue.innerText = `${age} 歲`;
+        
+        // 修改處 #2: 當X > Y時，同步更新Y
+        sliders.retirementAge.min = age;
+        if (parseInt(sliders.retirementAge.value) < parseInt(age)) {
+            sliders.retirementAge.value = age;
+            values.retirementAgeValue.innerText = `${age} 歲`;
+        }
+        
+        calculateAndDraw();
+    });
+    
+    sliders.retirementAge.addEventListener('input', (e) => {
+        values.retirementAgeValue.innerText = `${e.target.value} 歲`;
+        calculateAndDraw();
+    });
+    
+    sliders.initialAssets.addEventListener('input', (e) => {
+        values.initialAssetsValue.innerText = formatCurrency(e.target.value);
+        calculateAndDraw();
+    });
+
+    sliders.annualInvestment.addEventListener('input', (e) => {
+        values.annualInvestmentValue.innerText = formatCurrency(e.target.value);
+        calculateAndDraw();
+    });
+
+    sliders.annualSpending.addEventListener('input', (e) => {
+        values.annualSpendingValue.innerText = formatCurrency(e.target.value);
+        calculateAndDraw();
+    });
+
+    sliders.inflationRate.addEventListener('input', (e) => {
+        values.inflationRateValue.innerText = `${parseFloat(e.target.value).toFixed(1)} %`;
+        calculateAndDraw();
+    });
+    
+    sliders.returnRate.addEventListener('input', (e) => {
+        values.returnRateValue.innerText = `${parseFloat(e.target.value).toFixed(1)} %`;
+        calculateAndDraw();
+    });
+
+    // --- 6. 初始載入 ---
+    document.addEventListener('DOMContentLoaded', calculateAndDraw);
+
+</script>
+</body>
+</html>
